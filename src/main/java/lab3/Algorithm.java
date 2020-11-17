@@ -1,38 +1,73 @@
 package lab3;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Algorithm {
-    private static ArrayList<Integer>[] graph;
-    private static Map<Integer, Integer> map;
 
-    public static boolean possibleBipartition(int N, int[][] dislikes) {
-        graph = new ArrayList[N+1];
-        for (int i = 1; i <= N; ++i)
-            graph[i] = new ArrayList();
+    public static AtomicInteger result = new AtomicInteger();
+    public static AtomicInteger pairIdx = new AtomicInteger();
 
-        for (int[] edge: dislikes) {
-            graph[edge[0]].add(edge[1]);
-            graph[edge[1]].add(edge[0]);
-        }
-
-        map = new HashMap();
-        for (int node = 1; node <= N; ++node)
-            if (!map.containsKey(node) && depthFirstSearch(node, 0))
-                return false;
-        return true;
+    public static int algorithm(Set<Integer>[] pairs) {
+        var tribes = getTribes(pairs);
+        var dividedByGender = divideTribesByGender(tribes);
+        return createPairs(dividedByGender);
     }
 
-    public static boolean depthFirstSearch(int node, int c) {
-        if (map.containsKey(node))
-            return map.get(node) != c;
-        map.put(node, c);
+    private static Set<Set<Integer>> getTribes(Set<Integer>[] pairs) {
+        return Arrays.stream(pairs).map(currentPair -> {
+            if (pairIdx.get() != pairs.length - 1) {
+                var first = (Integer) pairs[pairIdx.get() + 1].toArray()[0];
+                var second = (Integer) pairs[pairIdx.get() + 1].toArray()[1];
+                if (currentPair.contains(first) || currentPair.contains(second)) {
+                    Set<Integer> interSection = Stream.of(currentPair, pairs[pairIdx.get() + 1]).flatMap(Collection::stream)
+                            .collect(Collectors.toSet());
+                    pairs[pairIdx.get() + 1] = Set.of(0);
+                    pairIdx.getAndIncrement();
+                    return interSection;
+                }
+            }
+            pairIdx.getAndIncrement();
+            return currentPair;
+        }).filter(it -> !it.contains(0))
+                .collect(Collectors.toSet());
+    }
 
-        for (int nei: graph[node])
-            if (depthFirstSearch(nei, c ^ 1))
-                return true;
-        return false;
+    private static int createPairs(List<Map<String, List<Integer>>> dividedByGender) {
+        dividedByGender.forEach(map -> {
+            if (pairIdx.get() != dividedByGender.size() - 1) {
+
+                int nextTribeManCount, nextTribeWomanCount, tribeWomanCount, tribeManCount;
+
+                if (map.get("woman") != null && dividedByGender.get(pairIdx.get() + 1).get("man") != null) {
+                    tribeWomanCount = map.get("woman").size();
+                    nextTribeManCount = dividedByGender.get(pairIdx.get() + 1).get("man").size();
+                    result.addAndGet(tribeWomanCount * nextTribeManCount);
+                }
+
+                if (map.get("man") != null && dividedByGender.get(pairIdx.get() + 1).get("woman") != null) {
+                    tribeManCount = map.get("man").size();
+                    nextTribeWomanCount = dividedByGender.get(pairIdx.get() + 1).size();
+                    result.addAndGet(tribeManCount * nextTribeWomanCount);
+                }
+            }
+        });
+        return result.get();
+    }
+
+    private static List<Map<String, List<Integer>>> divideTribesByGender(Set<Set<Integer>> tribes) {
+        pairIdx.set(0);
+        return tribes.stream()
+                .map(tribe -> tribe.stream().collect(Collectors.groupingBy(person -> {
+                    if (person % 2 == 0) {
+                        return "woman";
+                    } else {
+                        return "man";
+                    }
+                })))
+                .collect(Collectors.toList());
     }
 }
+
